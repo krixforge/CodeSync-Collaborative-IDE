@@ -1,8 +1,14 @@
+import Home from "./pages/Home";
 import "./App.css";
 import { useState, useEffect, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import Editor from "@monaco-editor/react";
+import {
+  Code2, Play, LogOut, Terminal, MessageSquare, Sparkles,
+  ChevronDown, FileCode, Users, Copy, Check, Send,
+  BookOpen, Bug, Zap, FlaskConical, Columns, X
+} from "lucide-react";
 
 // Avatar colors for users
 const AVATAR_COLORS = [
@@ -14,6 +20,8 @@ function getInitials(name) {
   if (!name) return "?";
   return name.slice(0, 2).toUpperCase();
 }
+
+const LANG_EXT = { java: "java", python: "py", javascript: "js", cpp: "cpp" };
 
 function App() {
   const [roomId, setRoomId] = useState("");
@@ -29,6 +37,9 @@ function App() {
   const [code, setCode] = useState(`public class Main {\n\n}`);
   const [loadingAI, setLoadingAI] = useState(false);
   const [aiResponse, setAiResponse] = useState("");
+  const [showEditor, setShowEditor] = useState(false);
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [copiedRoomId, setCopiedRoomId] = useState(false);
 
   // Right panel tab: "console" | "output" | "chat" | "copilot"
   const [rightTab, setRightTab] = useState("console");
@@ -56,7 +67,6 @@ function App() {
   function simulateCopilotReply(userText) {
     pushCopilotMessage("user", userText);
     setCopilotTyping(true);
-    // Placeholder response for free-text chat — quick actions use runQuickAction() instead.
     setTimeout(() => {
       setCopilotTyping(false);
       pushCopilotMessage(
@@ -71,6 +81,12 @@ function App() {
     simulateCopilotReply(copilotInput.trim());
     setCopilotInput("");
   }
+
+  const handleJoinRoom = (room, user) => {
+    setRoomId(room);
+    setUsername(user);
+    setShowEditor(true);
+  };
 
   async function runQuickAction(action) {
     const labels = {
@@ -122,18 +138,11 @@ function App() {
   }
 
   function handleCodeChange(value) {
-
     setCode(value);
-
     if (!stompClient) return;
-
     stompClient.publish({
       destination: "/app/code",
-      body: JSON.stringify({
-        roomId,
-        code: value,
-        language
-      })
+      body: JSON.stringify({ roomId, code: value, language })
     });
   }
 
@@ -169,52 +178,25 @@ function App() {
 
         client.publish({
           destination: "/app/join",
-          body: JSON.stringify({
-            sender: username,
-            roomId: roomId
-          })
+          body: JSON.stringify({ sender: username, roomId: roomId })
         });
 
         try {
-
-          const response =
-              await fetch(
-                  `http://localhost:8080/api/rooms/${roomId}`
-              );
-
+          const response = await fetch(`http://localhost:8080/api/rooms/${roomId}`);
           if (response.ok) {
-
-            const room =
-                await response.json();
-
+            const room = await response.json();
             if (room) {
-
-              if (room.code) {
-                setCode(room.code);
-              }
-
-              if (room.language) {
-                setLanguage(room.language);
-              }
+              if (room.code) setCode(room.code);
+              if (room.language) setLanguage(room.language);
             }
           }
-
         } catch (error) {
-
-          console.error(
-              "Failed to load room",
-              error
-          );
+          console.error("Failed to load room", error);
         }
 
         setStompClient(client);
-
         setJoined(true);
-
-        alert(
-            "Joined Room " +
-            roomId
-        );
+        alert("Joined Room " + roomId);
       },
       onStompError: (frame) => {
         console.error("Broker Error", frame);
@@ -251,6 +233,7 @@ function App() {
 
   function changeLanguage(newLanguage) {
     setLanguage(newLanguage);
+    setLangMenuOpen(false);
     if (!stompClient) return;
     stompClient.publish({
       destination: "/app/language",
@@ -279,25 +262,57 @@ function App() {
     }
   }
 
+  function handleCopyRoomId() {
+    navigator.clipboard.writeText(roomId);
+    setCopiedRoomId(true);
+    setTimeout(() => setCopiedRoomId(false), 1800);
+  }
+
+  const fileName = `solution.${LANG_EXT[language] || "java"}`;
+  const langLabel = { java: "Java", python: "Python 3.11", cpp: "C++", javascript: "JavaScript" };
+
+  // Close lang menu on outside click
+  useEffect(() => {
+    if (!langMenuOpen) return;
+    const handler = () => setLangMenuOpen(false);
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
+  }, [langMenuOpen]);
+
+  if (!showEditor) {
+    return <Home onJoin={handleJoinRoom} />;
+  }
+
   return (
     <div className="cs-app">
 
       {/* ── TOP NAVBAR ── */}
       <header className="cs-navbar">
         <div className="cs-navbar-left">
+          {/* Logo */}
           <span className="cs-logo">
-            <span className="cs-logo-icon">(/)</span>
+            <span className="cs-logo-icon"><Code2 size={14} /></span>
             <span className="cs-logo-text">CodeSync</span>
           </span>
 
-          {joined && (
+          <div className="cs-navbar-divider" />
+
+          {/* Live pill / join bar */}
+          {joined ? (
             <div className="cs-live-pill">
               <span className="cs-live-dot" />
-              <span>LIVE · {roomId}</span>
+              <span>LIVE</span>
+              <span className="cs-live-sep">·</span>
+              <span className="cs-live-room">{roomId}</span>
+              <button
+                className="cs-live-copy"
+                onClick={handleCopyRoomId}
+                title="Copy room ID"
+              >
+                {copiedRoomId ? <Check size={11} /> : <Copy size={11} />}
+              </button>
             </div>
-          )}
-
-          {!joined && (
+          ) : (
             <div className="cs-join-bar">
               <input
                 className="cs-input"
@@ -321,6 +336,7 @@ function App() {
         <div className="cs-navbar-right">
           {joined && (
             <>
+              {/* Avatar stack */}
               <div className="cs-avatar-stack">
                 {users.slice(0, 4).map((u, i) => (
                   <div
@@ -333,11 +349,17 @@ function App() {
                   </div>
                 ))}
               </div>
-              <span className="cs-online-count">{users.length} online</span>
+              <span className="cs-online-count">
+                <span className="cs-online-dot" />{users.length} online
+              </span>
+
               <button className="cs-btn cs-btn-run" onClick={runCode}>
-                ▶ Run Code
+                <Play size={13} fill="currentColor" />
+                Run
               </button>
+
               <button className="cs-btn cs-btn-ghost" onClick={leaveRoom}>
+                <LogOut size={13} />
                 Leave
               </button>
             </>
@@ -350,18 +372,30 @@ function App() {
 
         {/* ── LEFT SIDEBAR ── */}
         <aside className="cs-sidebar">
+          {/* Explorer */}
           <div className="cs-sidebar-section">
-            <p className="cs-sidebar-label">EXPLORER</p>
+            <p className="cs-sidebar-label">
+              <Columns size={9} />
+              Explorer
+            </p>
             <div className="cs-file-tab cs-file-tab--active">
-              <span className="cs-file-icon">📄</span>
-              <span>solution.{language === "python" ? "py" : language === "javascript" ? "js" : language === "cpp" ? "cpp" : "java"}</span>
+              <FileCode size={13} className="cs-file-icon-svg" />
+              <span>{fileName}</span>
             </div>
           </div>
 
+          {/* Team */}
           <div className="cs-sidebar-section">
-            <p className="cs-sidebar-label">TEAM</p>
+            <p className="cs-sidebar-label">
+              <Users size={9} />
+              Team
+            </p>
             {users.length === 0 ? (
-              <p className="cs-sidebar-empty">No users online</p>
+              <div className="cs-sidebar-empty-state">
+                <Users size={22} className="cs-empty-icon" />
+                <span>No users online</span>
+                {!joined && <span className="cs-empty-hint">Join a room to see teammates</span>}
+              </div>
             ) : (
               <ul className="cs-user-list">
                 {users.map((u, i) => (
@@ -382,36 +416,57 @@ function App() {
                 ))}
               </ul>
             )}
-
-            {!joined && (
-              <p className="cs-sidebar-empty">Join a room to see teammates</p>
-            )}
           </div>
         </aside>
 
         {/* ── EDITOR PANEL ── */}
         <main className="cs-editor-panel">
-          {/* File tabs row */}
+          {/* File tabs + language select */}
           <div className="cs-editor-topbar">
             <div className="cs-file-tabs">
               <div className="cs-editor-filetab cs-editor-filetab--active">
-                solution.{language === "python" ? "py" : language === "javascript" ? "js" : language === "cpp" ? "cpp" : "java"}
+                <FileCode size={12} style={{ color: "#818cf8", flexShrink: 0 }} />
+                {fileName}
               </div>
             </div>
 
             <div className="cs-editor-controls">
-              <div className="cs-lang-select-wrap">
+              {/* Custom language dropdown */}
+              <div
+                className="cs-lang-dropdown-wrap"
+                onClick={(e) => { e.stopPropagation(); setLangMenuOpen(v => !v); }}
+              >
+                <button className="cs-lang-trigger">
+                  <span className="cs-lang-dot" />
+                  {langLabel[language] || language}
+                  <ChevronDown size={11} className={`cs-lang-caret ${langMenuOpen ? "cs-lang-caret--open" : ""}`} />
+                </button>
+                {langMenuOpen && (
+                  <div className="cs-lang-menu">
+                    {Object.entries(langLabel).map(([val, label]) => (
+                      <button
+                        key={val}
+                        className={`cs-lang-option ${language === val ? "cs-lang-option--active" : ""}`}
+                        onClick={() => changeLanguage(val)}
+                      >
+                        {label}
+                        {language === val && <Check size={11} />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Hidden native select for accessibility / fallback */}
                 <select
-                  className="cs-lang-select"
+                  className="cs-lang-select-hidden"
                   value={language}
                   onChange={(e) => changeLanguage(e.target.value)}
+                  aria-label="Select language"
                 >
                   <option value="java">Java</option>
                   <option value="python">Python 3.11</option>
                   <option value="cpp">C++</option>
                   <option value="javascript">JavaScript</option>
                 </select>
-                <span className="cs-lang-caret">▾</span>
               </div>
             </div>
           </div>
@@ -438,27 +493,31 @@ function App() {
         {/* ── RIGHT PANEL ── */}
         <aside className="cs-right-panel">
 
-          {/* Tabs: Console / Output / Chat / Copilot */}
+          {/* Tabs */}
           <div className="cs-rtabs">
-            {["console", "output", "chat", "copilot"].map(tab => (
+            {[
+              { id: "console", icon: <Terminal size={12} />, label: "Console" },
+              { id: "output",  icon: <Columns size={12} />, label: "Output" },
+              { id: "chat",    icon: <MessageSquare size={12} />, label: "Chat" },
+              { id: "copilot", icon: <Sparkles size={12} />, label: "Copilot", accent: true },
+            ].map(tab => (
               <button
-                key={tab}
-                className={`cs-rtab ${tab === "copilot" ? "cs-rtab--copilot" : ""} ${rightTab === tab ? "cs-rtab--active" : ""}`}
-                onClick={() => setRightTab(tab)}
+                key={tab.id}
+                className={`cs-rtab ${tab.accent ? "cs-rtab--copilot" : ""} ${rightTab === tab.id ? "cs-rtab--active" : ""}`}
+                onClick={() => setRightTab(tab.id)}
               >
-                {tab === "copilot" ? "✦ Copilot" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab.icon}
+                {tab.label}
               </button>
             ))}
           </div>
 
-          {/* Copilot tab content */}
+          {/* ── Copilot tab ── */}
           {rightTab === "copilot" && (
             <div className="cp-panel">
               <div className="cp-header">
                 <div className="cp-header-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2L14.5 9.5L22 12L14.5 14.5L12 22L9.5 14.5L2 12L9.5 9.5L12 2Z" fill="currentColor"/>
-                  </svg>
+                  <Sparkles size={14} />
                 </div>
                 <div className="cp-header-text">
                   <span className="cp-header-title">AI Copilot</span>
@@ -468,16 +527,16 @@ function App() {
 
               <div className="cp-quick-actions">
                 <button className="cp-action-btn" onClick={() => runQuickAction("explain")} disabled={loadingAI}>
-                  <span className="cp-action-icon">📖</span> Explain Code
+                  <BookOpen size={12} className="cp-action-icon" /> Explain
                 </button>
                 <button className="cp-action-btn" onClick={() => runQuickAction("bugs")} disabled={loadingAI}>
-                  <span className="cp-action-icon">🐞</span> Find Bugs
+                  <Bug size={12} className="cp-action-icon" /> Find Bugs
                 </button>
                 <button className="cp-action-btn" onClick={() => runQuickAction("optimize")} disabled={loadingAI}>
-                  <span className="cp-action-icon">⚡</span> Optimize Code
+                  <Zap size={12} className="cp-action-icon" /> Optimize
                 </button>
                 <button className="cp-action-btn" onClick={() => runQuickAction("tests")} disabled={loadingAI}>
-                  <span className="cp-action-icon">🧪</span> Generate Tests
+                  <FlaskConical size={12} className="cp-action-icon" /> Tests
                 </button>
               </div>
 
@@ -485,7 +544,9 @@ function App() {
                 <div className="cp-analysis-card">
                   <div className="cp-analysis-header">
                     <span>Code Analysis</span>
-                    <button className="cp-analysis-close" onClick={() => setCodeAnalysis(null)}>×</button>
+                    <button className="cp-analysis-close" onClick={() => setCodeAnalysis(null)}>
+                      <X size={13} />
+                    </button>
                   </div>
                   <div className="cp-analysis-row">
                     <span className="cp-analysis-label">Language</span>
@@ -511,7 +572,9 @@ function App() {
               <div className="cp-chat-messages">
                 {copilotMessages.map((m, i) => (
                   <div key={i} className={`cp-msg ${m.role === "user" ? "cp-msg--user" : "cp-msg--ai"}`}>
-                    {m.role === "ai" && <div className="cp-msg-avatar">✦</div>}
+                    {m.role === "ai" && (
+                      <div className="cp-msg-avatar"><Sparkles size={11} /></div>
+                    )}
                     <div className="cp-msg-bubble">
                       <p className="cp-msg-text">{m.content}</p>
                     </div>
@@ -520,10 +583,10 @@ function App() {
 
                 {copilotTyping && (
                   <div className="cp-msg cp-msg--ai">
-                    <div className="cp-msg-avatar">✦</div>
+                    <div className="cp-msg-avatar"><Sparkles size={11} /></div>
                     <div className="cp-msg-bubble cp-typing">
                       {loadingAI ? (
-                        <span className="cp-thinking-text">Thinking...</span>
+                        <span className="cp-thinking-text">Thinking…</span>
                       ) : (
                         <>
                           <span className="cp-dot" />
@@ -540,48 +603,56 @@ function App() {
               <div className="cp-input-row">
                 <input
                   className="cp-input"
-                  placeholder="Ask about your code..."
+                  placeholder="Ask about your code…"
                   value={copilotInput}
                   onChange={(e) => setCopilotInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") sendCopilotMessage(); }}
                 />
-                <button className="cp-send-btn" onClick={sendCopilotMessage}>➤</button>
+                <button className="cp-send-btn" onClick={sendCopilotMessage}>
+                  <Send size={13} />
+                </button>
               </div>
             </div>
           )}
 
-          {/* Console / Output tab content */}
+          {/* ── Console / Output tab ── */}
           {(rightTab === "console" || rightTab === "output") && (
             <div className="cs-console">
               {output ? (
                 <>
                   <div className="cs-console-run-line">
-                    <span className="cs-console-run-icon">▶</span>
+                    <Play size={9} fill="currentColor" className="cs-console-run-icon" />
                     <span className="cs-console-run-label">
-                      {language === "python" ? "python solution.py" : `run solution.${language === "java" ? "java" : language === "cpp" ? "cpp" : "js"}`}
+                      {language === "python" ? "python solution.py" : `run solution.${LANG_EXT[language] || "java"}`}
                     </span>
                   </div>
                   <pre className="cs-console-output">{output}</pre>
                   {output !== "Running..." && (
                     <div className="cs-console-exit">
-                      <span className="cs-exit-ok">✓</span> Exit code 0
+                      <Check size={11} className="cs-exit-ok" /> Exit code 0
                     </div>
                   )}
                 </>
               ) : (
                 <div className="cs-console-empty">
+                  <Terminal size={28} className="cs-console-empty-icon" />
                   <span>Run your code to see output here</span>
+                  <span className="cs-console-empty-hint">Press <kbd>Run</kbd> in the toolbar</span>
                 </div>
               )}
             </div>
           )}
 
-          {/* Chat tab content */}
+          {/* ── Chat tab ── */}
           {rightTab === "chat" && (
             <div className="cs-chat-panel">
               <div className="cs-chat-messages">
                 {messages.length === 0 ? (
-                  <div className="cs-chat-empty">No messages yet</div>
+                  <div className="cs-chat-empty-state">
+                    <MessageSquare size={26} className="cs-empty-icon" />
+                    <span>No messages yet</span>
+                    <span className="cs-empty-hint">Say hello to your team</span>
+                  </div>
                 ) : (
                   messages.map((msg, index) => (
                     <div
@@ -601,22 +672,25 @@ function App() {
               <div className="cs-chat-input-row">
                 <input
                   className="cs-chat-input"
-                  placeholder="Type a message..."
+                  placeholder="Type a message…"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
                 />
                 <button className="cs-send-btn" onClick={sendMessage}>
-                  ➤
+                  <Send size={13} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* Team Chat compact — always visible at bottom when on console/output tab */}
+          {/* ── Team chat mini (bottom of console/output) ── */}
           {(rightTab === "console" || rightTab === "output") && (
             <div className="cs-team-chat-mini">
-              <p className="cs-sidebar-label" style={{ padding: "12px 16px 6px" }}>TEAM CHAT</p>
+              <p className="cs-sidebar-label cs-sidebar-label--padded">
+                <MessageSquare size={9} />
+                Team Chat
+              </p>
               <div className="cs-mini-messages">
                 {messages.slice(-5).map((msg, i) => (
                   <div key={i} className={`cs-mini-msg ${msg.sender === username ? "cs-mini-msg--mine" : ""}`}>
@@ -632,18 +706,20 @@ function App() {
                   </div>
                 ))}
                 {messages.length === 0 && (
-                  <p className="cs-sidebar-empty" style={{ padding: "8px 16px" }}>No messages yet</p>
+                  <p className="cs-sidebar-empty cs-sidebar-empty--padded">No messages yet</p>
                 )}
               </div>
-              <div className="cs-chat-input-row" style={{ borderTop: "1px solid #2a2a3a", padding: "10px 12px" }}>
+              <div className="cs-chat-input-row cs-chat-input-row--mini">
                 <input
                   className="cs-chat-input"
-                  placeholder="Type a message..."
+                  placeholder="Type a message…"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
                 />
-                <button className="cs-send-btn" onClick={sendMessage}>➤</button>
+                <button className="cs-send-btn" onClick={sendMessage}>
+                  <Send size={13} />
+                </button>
               </div>
             </div>
           )}
