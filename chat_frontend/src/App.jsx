@@ -10,6 +10,7 @@ import {
   BookOpen, Bug, Zap, FlaskConical, Columns, X
 } from "lucide-react";
 
+
 // Avatar colors for users
 const AVATAR_COLORS = [
   "#6366f1", "#ec4899", "#f59e0b", "#10b981",

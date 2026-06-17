@@ -4,6 +4,21 @@ CodeSync is a real-time collaborative coding platform that allows multiple users
 
 The project was built to explore distributed collaboration systems using WebSockets and modern full-stack technologies. It combines real-time synchronization, code execution, AI integration, and persistent storage into a single platform.
 
+## Screenshots
+
+### Landing Page
+
+![Landing Page](README Assets/landing-page.png)
+
+### Collaborative Editor
+
+![Collaborative Editor](README Assets/editor-page.png)
+
+### Realtime Chats
+
+![AI Copilot](README Assets/chats.png)
+
+
 ## Features
 
 ### Real-Time Collaboration
