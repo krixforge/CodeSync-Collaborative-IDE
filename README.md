@@ -7,16 +7,13 @@ The project was built to explore distributed collaboration systems using WebSock
 ## Screenshots
 
 ### Landing Page
-
-![Landing Page](README Assets/landing-page.png)
+![Landing Page](assets/landing-page.png)
 
 ### Collaborative Editor
-
-![Collaborative Editor](README Assets/editor-page.png)
+![Collaborative Editor](assets/editor-page.png)
 
 ### Realtime Chats
-
-![AI Copilot](README Assets/chats.png)
+![Realtime Chats](assets/chats.png)
 
 
 ## Features
